@@ -1,6 +1,6 @@
 <template>
   <div class="staff__container fill-height">
-    <v-container style="max-width: 860px">
+    <v-container style="max-width: 960px">
       <v-row>
         <v-col>
           <v-card class="mb-4">
@@ -52,6 +52,7 @@
             :sort-desc="true"
             height="290"
             class="elevation-1"
+            fixed-header
           >
             <template #[`item.no`]="{ index }">
               {{ (index + 1) + ((options.page - 1) * options.itemsPerPage) }}
