@@ -1,0 +1,1 @@
+__NUXT_JSONP__("/screen", {data:[{}],fetch:{},mutations:void 0});
