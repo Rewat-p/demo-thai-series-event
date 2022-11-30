@@ -43,9 +43,18 @@
       <v-row>
         <v-col>
           <div class="text-subtitle-1 pb-2">History</div>
-          <v-data-table :headers="headers" :items="logs" :items-per-page="5" class="elevation-1">
+          <v-data-table
+            :headers="headers"
+            :items="logs"
+            :items-per-page="5"
+            :options.sync="options"
+            sort-by="timestamp"
+            :sort-desc="true"
+            height="290"
+            class="elevation-1"
+          >
             <template #[`item.no`]="{ index }">
-              {{ index + 1 }}
+              {{ (index + 1) + ((options.page - 1) * options.itemsPerPage) }}
             </template>
             <template #[`item.status`]="{ item }">
               <v-chip
@@ -92,13 +101,14 @@ export default {
           sortable: false,
           value: 'no',
         },
-        { text: 'Code', value: 'code' },
-        { text: 'Name', value: 'name' },
-        { text: 'Reward', value: 'reward_name' },
-        { text: 'Status', value: 'status' },
-        { text: 'Timestamp', value: 'timestamp' },
-        { text: '', value: 'tools' },
+        { text: 'Code', value: 'code', sortable: false, },
+        { text: 'Name', value: 'name', sortable: false, },
+        { text: 'Reward', value: 'reward_name', sortable: false, },
+        { text: 'Status', value: 'status', sortable: false, },
+        { text: 'Timestamp', value: 'timestamp', sortable: false, },
+        { text: '', value: 'tools', sortable: false, align: 'end' },
       ],
+      options: {},
       valid: true,
     }
   },
