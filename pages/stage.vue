@@ -71,7 +71,7 @@ export default {
         status: 'wait',
         timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss')
       })
-      await this.$fire.database.ref('game/stage').update({ 'status': 'spin' })
+      await this.$fire.database.ref('game/stage').update({ code: rand, status: 'spin' })
     }
   }
 }
