@@ -1,20 +1,39 @@
 <template>
   <div v-resize="onResize" class="screen__container fill-height">
     <div id="content" class="screen__content">
-      <div class="screen__item" :style="{ width: boxSize + 'px', height: boxSize + 'px' }">
+      <div
+        class="screen__item"
+        :style="{ width: boxSize + 'px', height: boxSize + 'px' }"
+      >
         <div class="screen__boxes"></div>
       </div>
-      <div class="screen__item" :style="{ width: boxSize + 'px', height: boxSize + 'px' }">
+      <div
+        class="screen__item"
+        :style="{ width: boxSize + 'px', height: boxSize + 'px' }"
+      >
         <div class="screen__boxes"></div>
       </div>
-      <div class="screen__item" :style="{ width: boxSize + 'px', height: boxSize + 'px' }">
+      <div
+        class="screen__item"
+        :style="{ width: boxSize + 'px', height: boxSize + 'px' }"
+      >
         <div class="screen__boxes"></div>
       </div>
     </div>
 
-    <div v-show="false" style="position: absolute;top: 16px;right: 16px;">
+    <div style="position: absolute;opacity: 0">
+      <v-btn @click="showWinnerList = !showWinnerList">show winner</v-btn>
+    </div>
+
+    <div v-show="false" style="position: absolute; top: 16px; right: 16px">
       <v-btn @click="handleSpin">spin</v-btn>
       <v-btn @click="handleReset">reset</v-btn>
+    </div>
+
+    <div v-show="showWinnerList" id="winner_list" class="winner-window">
+      <div  class="winner-window__box" :style="{ height: maxWinnerHeight + 'px' }">
+        <winner-list />
+      </div>
     </div>
   </div>
 </template>
@@ -28,27 +47,49 @@ export default {
       items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
       spinning: false,
       startRef: null,
+      isWinnerMouseDown: false,
+      winnerOffset: [0, 0],
+      maxWinnerHeight: 100,
+      originalWinnerWidth: 100,
+      showWinnerList: true,
     }
   },
   mounted() {
     this.initEvent()
     this.init()
+
+    const elem = document.querySelector('#winner_list')
+    elem.addEventListener('mouseup', this.handleOnWinnerMouseUp)
+    elem.addEventListener('mouseleave', this.handleOnWinnerMouseUp)
+    elem.addEventListener('mousedown', this.handleOnWinnerMouseDown)
+    elem.addEventListener('mousemove', this.handleOnWinnerMouseMove)
+  },
+  beforeDestroy() {
+    const elem = document.querySelector('#winner_list')
+    elem.removeEventListener('mouseup', this.handleOnWinnerMouseUp)
+    elem.removeEventListener('mouseleave', this.handleOnWinnerMouseUp)
+    elem.removeEventListener('mousedown', this.handleOnWinnerMouseDown)
+    elem.removeEventListener('mousemove', this.handleOnWinnerMouseMove)
   },
   methods: {
     onResize() {
       const width = Math.min(window.innerWidth, 860) - 69
-      this.boxSize = width/3
+      this.boxSize = width / 3
+      const height = window.innerHeight
+      this.maxWinnerHeight = height - 32
     },
     initEvent() {
       try {
-        // console.log(this.$fire.database.ref('stage_spin'))
-        this.startRef = this.$fire.database.ref('game/stage')
-        this.startRef.on('value', (snapshot) => {
+        this.$fire.database.ref('game/stage').on('value', (snapshot) => {
           const val = snapshot.val()
+          console.log('stage', val)
           const status = val.status
           const code = val.code
           if (status === 'ready') this.handleReset()
-          else if (status === 'spin') this.spin(code)
+          else if (status === 'spinning') {
+            this.handleReset()
+            this.spin(code)
+          }
         })
       } catch (error) {
         console.error(error)
@@ -64,7 +105,7 @@ export default {
 
         const boxes = item.querySelector('.screen__boxes')
         const boxesClone = boxes.cloneNode(false)
-        const pool = ['?']
+        const pool = ['0']
 
         if (!first) {
           groups = Math.min(1, groups)
@@ -76,19 +117,27 @@ export default {
           pool.push(...this.shuffle(arr))
           pool.push(selected[row])
 
-          boxesClone.addEventListener('transitionstart', () => {
-            item.dataset.spinned = '1'
-            boxes.querySelectorAll('.screen__box').forEach((box) => {
-              box.style.filter = 'blur(1px)'
-            })
-          }, { once: true })
+          boxesClone.addEventListener(
+            'transitionstart',
+            () => {
+              item.dataset.spinned = '1'
+              boxes.querySelectorAll('.screen__box').forEach((box) => {
+                box.style.filter = 'blur(1px)'
+              })
+            },
+            { once: true }
+          )
 
-          boxesClone.addEventListener('transitionend', () => {
-            boxes.querySelectorAll('.screen__box').forEach((box, index) => {
-              box.style.filter = 'blur(0)'
-              if (index > 0) boxes.removeChild(box)
-            })
-          }, { once: true })
+          boxesClone.addEventListener(
+            'transitionend',
+            () => {
+              boxes.querySelectorAll('.screen__box').forEach((box, index) => {
+                box.style.filter = 'blur(0)'
+                if (index > 0) boxes.removeChild(box)
+              })
+            },
+            { once: true }
+          )
         }
 
         for (let i = pool.length - 1; i >= 0; i--) {
@@ -100,12 +149,26 @@ export default {
           boxesClone.appendChild(box)
         }
 
-        boxesClone.style.transitionDuration = `${duration}s`;
-        boxesClone.style.transform = `translateY(-${item.clientHeight * (pool.length - 1)}px)`;
-        item.replaceChild(boxesClone, boxes);
+        boxesClone.style.transitionDuration = `${duration}s`
+        boxesClone.style.transform = `translateY(-${
+          item.clientHeight * (pool.length - 1)
+        }px)`
+        item.replaceChild(boxesClone, boxes)
 
         row += 1
       }
+    },
+    async getReward() {
+      const snapshot = await this.$fire.database
+        .ref('game/reward')
+        .once('value')
+      const val = snapshot.val()
+      const snapshot2 = await this.$fire.database
+        .ref('rewards')
+        .child(val.ref)
+        .once('value')
+      const reward = snapshot2.val()
+      return { ...reward, ref: val.ref }
     },
     async spin(code) {
       if (this.spinning) return
@@ -121,9 +184,14 @@ export default {
         boxes.style.transform = 'translateY(0)'
         await new Promise((resolve) => setTimeout(resolve, duration * 100))
       }
-      setTimeout(async () => {
-        this.startRef && await this.startRef.update({ '/status': 'spined'})
-      }, 900);
+      await new Promise((resolve) => setTimeout(resolve, 900))
+      const reward = await this.getReward()
+      const status = reward.qty - reward.draws < 1 ? 'break' : 'spined'
+      console.log('status', status)
+      await this.$fire.database.ref('game/stage').update({ status })
+      // setTimeout(async () => {
+      //   await this.$fire.database.ref('game/stage').update({ status: 'spined'})
+      // }, 900);
       // await this.startRef.update({ '/status': 'spined'})
       // this.spinning = false
     },
@@ -145,7 +213,37 @@ export default {
     handleSpin() {
       const rand = Math.floor(Math.random() * 501)
       this.spin(rand)
-    }
+    },
+    inParent(parent, child){
+      return !!parent.contains(child)
+    },
+    handleOnWinnerMouseDown(e) {
+      const elem = document.querySelector('#winner_list')
+      const inparent = this.inParent(document.querySelector('.winner-list__actions'), e.target)
+      if (inparent) return
+      this.isWinnerMouseDown = true
+      this.originalWinnerWidth = elem.offsetWidth
+      this.winnerOffset = [
+        elem.offsetLeft - e.clientX,
+        elem.offsetTop - e.clientY,
+      ]
+      console.log('mouse down', this.isWinnerMouseDown, this.winnerOffset)
+    },
+    handleOnWinnerMouseUp(e) {
+      this.isWinnerMouseDown = false
+      console.log('mouse up')
+    },
+    handleOnWinnerMouseMove(e) {
+      e.preventDefault()
+      const elem = document.querySelector('#winner_list')
+      if (this.isWinnerMouseDown) {
+        elem.style.left = e.clientX + this.winnerOffset[0] + 'px'
+        elem.style.top = e.clientY + this.winnerOffset[1] + 'px'
+        elem.style.right = (window.innerWidth - ((e.clientX + this.winnerOffset[0]) + this.originalWinnerWidth)) + 'px'
+        console.log('mouse move', e.clientX + this.winnerOffset[0], this.originalWinnerWidth)
+        // elem.style.right = (elem.style.right - (elem.style.left - this.originalWinnerWidth)) + 'px'
+      }
+    },
   },
 }
 </script>
@@ -174,6 +272,11 @@ export default {
     width: 100%;
     max-width: 860px;
     display: flex;
+    user-select: none;
+
+    & * {
+      user-select: none;
+    }
   }
 
   &__item {
@@ -187,7 +290,21 @@ export default {
   &__boxes {
     transition: transform 1s ease-in-out;
   }
+}
 
+.winner-window {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  cursor: move;
 
+  &__box {
+    background: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(4.7px);
+    -webkit-backdrop-filter: blur(4.7px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+  }
 }
 </style>

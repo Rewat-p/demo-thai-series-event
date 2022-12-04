@@ -1,27 +1,35 @@
 <template>
-  <div class="stage__container fill-height">
-    <div class="stage__content">
-      <div class="stage__reward mb-6">
-        <div class="stage__reward--name">{{ reward }}</div>
-        <div v-if="stage === 'spined'" class="stage__reward--winner">{{ winner.code }} - {{ winner.name }}</div>
+  <div v-resize="onResize" class="stage__container fill-height">
+    <div :class="['stage__box']" :style="{ width: boxSize + 'px', height: boxSize + 'px' }">
+      <div class="stage-btn--border" :style="{ width: buttonSize + 'px', height: buttonSize + 'px' }">
+        <button :disabled="!['ready', 'spined'].includes(status)" class="stage-btn" @click="handleOnSpin">
+          หมุน
+        </button>
       </div>
-      <button :disabled="stage !== 'ready'" class="game-button orange" style="width: 100%;margin: auto" @click="handleOnStart">Start</button>
     </div>
+    <v-overlay :value="status === 'wait'" :opacity="0.7">
+      <div class="text-center">
+        <div class="white--text text-h6 mt-2">ปิดใช้งาน</div>
+      </div>
+    </v-overlay>
+    <v-overlay :value="!['ready', 'spined', 'wait'].includes(status)">
+      <div class="text-center">
+        <v-progress-circular width="2" indeterminate />
+        <div class="white--text text-h6 mt-2">โปรดรอสักครู่...</div>
+      </div>
+    </v-overlay>
   </div>
 </template>
 
 <script>
-import { faker } from '@faker-js/faker'
 import dayjs from 'dayjs'
 export default {
   name: 'StagePage',
   data() {
     return {
-      reward: '',
-      rewardId: null,
-      winner: {},
-      stage: 'wait',
-      startRef: null,
+      boxSize: 100,
+      buttonSize: 50,
+      status: false,
     }
   },
   mounted() {
@@ -30,195 +38,158 @@ export default {
   methods: {
     initEvent() {
       try {
-        // console.log(this.$fire.database.ref('stage_spin'))
-        const ref = this.$fire.database.ref('game/reward')
-        ref.on('value', (snapshot) => {
+        this.$fire.database.ref('game/stage').on('value', (snapshot) => {
           const val = snapshot.val()
-          this.reward = val.name
-          this.rewardId = val.id
-          this.winner = val.winner
-          console.log(val)
-        })
-
-        this.startRef = this.$fire.database.ref('game/stage')
-        this.startRef.on('value', (snapshot) => {
-          const val = snapshot.val()
-          this.stage = val.status
-          console.log(this.stage)
+          this.status = val.status
+          console.log('upate status', val, this.status)
         })
       } catch (error) {
         console.error(error)
       }
     },
-    async handleOnStart() {
-      if (this.stage !== 'ready') return
-      const rand = Math.floor(Math.random() * 501)
-      faker.seed(rand)
-      const name = 'คุณ' + faker.name.firstName() + ' ' + faker.name.lastName()
+    onResize() {
+      const width = Math.max(Math.min(800, window.innerWidth), 320)
+      console.log(width)
+      this.boxSize = parseInt(width * 0.8)
+      this.buttonSize = parseInt(this.boxSize * 0.5)
+    },
+    async getReward() {
+      const snapshot = await this.$fire.database.ref('game/reward').once('value')
+      const val = snapshot.val()
+      const snapshot2 = await this.$fire.database.ref('rewards').child(val.ref).once('value')
+      const reward = snapshot2.val()
+      return { ...reward, ref: val.ref }
+    },
+    async handleOnSpin() {
+      if (!['ready', 'spined'].includes(this.status)) return
 
-      this.$fire.database.ref('game/reward').update({
-        winner: {
+      try {
+        const rand = Math.floor(Math.random() * 501)
+        const name = 'คุณมโน ได้รางวัล'
+        const reward = await this.getReward()
+        console.log('rewards', reward)
+        await this.$fire.database.ref('game/stage').update({ code: rand, status: 'spinning' })
+        const draws = reward.draws + 1
+        await this.$fire.database.ref('rewards').child(reward.ref).update({ draws })
+        // .transaction((item) => {
+        //   item.draws = item.draws ? item.draws + 1 : 1
+        //   return item
+        // })
+        // .update({ draws: this.$fire.database.increment(1) })
+        await this.$fire.database.ref('logs').push({
           code: rand,
           name,
-        }
-      })
-      const refLog = this.$fire.database.ref('logs')
-      await refLog.push({
-        code: rand,
-        name,
-        reward_id: this.rewardId,
-        reward_name: this.reward,
-        status: 'wait',
-        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss')
-      })
-      await this.$fire.database.ref('game/stage').update({ code: rand, status: 'spin' })
+          reward_id: reward.id,
+          reward_name: reward.name,
+          reward_ref: reward.ref,
+          status: 'confirmed',
+          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss')
+        })
+      } catch (error) {
+        console.error(error)
+      }
     }
   }
 }
 </script>
 
-<style scoped>
-@import 'https://fonts.googleapis.com/css?family=Carter+One';
-
-.game-button {
-  position: relative;
-  top: 0;
-  cursor: pointer;
-  text-decoration: none !important;
-  outline: none !important;
-  font-family: 'Carter One', sans-serif;
-  font-size: 20px;
-  line-height: 1.5em;
-  letter-spacing: .1em;
-  text-shadow: 2px 2px 1px #0066a2, -2px 2px 1px #0066a2, 2px -2px 1px #0066a2, -2px -2px 1px #0066a2, 0 2px 1px #0066a2, 0 -2px 1px #0066a2, 0 4px 1px #004a87, 2px 4px 1px #004a87, -2px 4px 1px  #004a87;
-  border: none;
-  margin: 15px 15px 30px;
-  background: repeating-linear-gradient( 45deg, #3ebbf7, #3ebbf7 5px, #45b1f4 5px, #45b1f4 10px);
-  border-bottom: 3px solid rgb(16 91 146 / 50%);
-  border-top: 3px solid rgb(255 255 255 / 30%);
-  color: #fff !important;
-  border-radius: 8px;
-  padding: 8px 15px 10px;
-  box-shadow: 0 6px 0 #266b91, 0 8px 1px 1px rgb(0 0 0 / 30%), 0 10px 0 5px #12517d, 0 12px 0 5px #1a6b9a, 0 15px 0 5px #0c405e, 0 15px 1px 6px rgb(0 0 0 / 30%);
-}
-
-.game-button:hover {
-  top:2px;
-  box-shadow: 0 4px 0 #266b91, 0 6px 1px 1px rgb(0 0 0 / 30%), 0 8px 0 5px #12517d, 0 10px 0 5px #1a6b9a, 0 13px 0 5px #0c405e, 0 13px 1px 6px rgb(0 0 0 / 30%);
-}
-
-.game-button::before {
-  content: '';
-  height: 10%;
-  position: absolute;
-  width: 40%;
-  background: #fff;
-  right: 13%;
-  top: -3%;
-  border-radius: 99px;
-}
-
-.game-button::after {
-  content: '';
-  height: 10%;
-  position: absolute;
-  width: 5%;
-  background: #fff;
-  right: 5%;
-  top: -3%;
-  border-radius: 99px;
-}
-
-.game-button.orange {
-  background: repeating-linear-gradient( 45deg, #ffc800, #ffc800 5px, #ffc200 5px, #ffc200 10px);
-  box-shadow: 0 6px 0 #b76113, 0 8px 1px 1px rgb(0 0 0 / 30%), 0 10px 0 5px #75421f, 0 12px 0 5px #8a542b, 0 15px 0 5px #593116, 0 15px 1px 6px rgb(0 0 0 / 30%);
-  border-bottom: 3px solid rgb(205 102 0 / 50%);
-  text-shadow: 2px 2px 1px #e78700, -2px 2px 1px #e78700, 2px -2px 1px #e78700, -2px -2px 1px #e78700, 0 2px 1px #e78700, 0 -2px 1px #e78700, 0 4px 1px #c96100, 2px 4px 1px #c96100, -2px 4px 1px  #c96100;
-}
-
-.game-button.orange:hover {
-  top:2px;
-  box-shadow: 0 4px 0 #b76113, 0 6px 1px 1px rgb(0 0 0 / 30%), 0 8px 0 5px #75421f, 0 10px 0 5px #8a542b, 0 13px 0 5px #593116, 0 13px 1px 6px rgb(0 0 0 / 30%);
-}
-
-.game-button.red {
-  background: repeating-linear-gradient( 45deg, #ff4f4c, #ff4f4c 5px, #ff4643 5px, #ff4643 10px);
-  box-shadow: 0 6px 0 #ae2725, 0 8px 1px 1px rgb(0 0 0 / 30%), 0 10px 0 5px #831614, 0 12px 0 5px #a33634, 0 15px 0 5px #631716, 0 15px 1px 6px rgb(0 0 0 / 30%);
-  border-bottom: 3px solid rgb(160 25 23 / 50%);
-  text-shadow: 2px 2px 1px #d72d21, -2px 2px 1px #d72d21, 2px -2px 1px #d72d21, -2px -2px 1px #d72d21, 0 2px 1px #d72d21, 0 -2px 1px #d72d21, 0 4px 1px #930704, 2px 4px 1px #930704, -2px 4px 1px  #930704;
-}
-
-.game-button.red:hover {
-  top:2px;
-  box-shadow: 0 4px 0 #ae2725, 0 6px 1px 1px rgb(0 0 0 / 30%), 0 8px 0 5px #831614, 0 10px 0 5px #a33634, 0 13px 0 5px #631716, 0 13px 1px 6px rgb(0 0 0 / 30%);
-}
-
-.game-button.green {
-  background: repeating-linear-gradient( 45deg, #54d440, #54d440 5px, #52cc3f 5px, #52cc3f 10px);
-  box-shadow: 0 6px 0 #348628, 0 8px 1px 1px rgb(0 0 0 / 30%), 0 10px 0 5px #2a6d20, 0 12px 0 5px #39822e, 0 15px 0 5px #1d4c16, 0 15px 1px 6px rgb(0 0 0 / 30%);
-  border-bottom: 3px solid rgb(40 117 29 / 50%);
-  text-shadow: 2px 2px 1px #348628, -2px 2px 1px #348628, 2px -2px 1px #348628, -2px -2px 1px #348628, 0 2px 1px #348628, 0 -2px 1px #348628, 0 4px 1px #1d4c16, 2px 4px 1px #1d4c16, -2px 4px 1px #1d4c16;
-}
-
-.game-button.green:hover {
-  top:2px;
-  box-shadow: 0 4px 0 #348628, 0 6px 1px 1px rgb(0 0 0 / 30%), 0 8px 0 5px #2a6d20, 0 10px 0 5px #39822e, 0 13px 0 5px #1d4c16, 0 13px 1px 6px rgb(0 0 0 / 30%);
-}
-
-.game-button:disabled,
-.game-button[disabled] {
-  top: 0 !important;
-  opacity: 0.8;
-  cursor: not-allowed;
-}
-
-.game-button:disabled.orange,
-.game-button[disabled].orange {
-  box-shadow: 0 6px 0 #b76113, 0 8px 1px 1px rgb(0 0 0 / 30%), 0 10px 0 5px #75421f, 0 12px 0 5px #8a542b, 0 15px 0 5px #593116, 0 15px 1px 6px rgb(0 0 0 / 30%) !important;
-}
-
-.game-button:disabled.green,
-.game-button[disabled].green {
-  box-shadow: 0 6px 0 #348628, 0 8px 1px 1px rgb(0 0 0 / 30%), 0 10px 0 5px #2a6d20, 0 12px 0 5px #39822e, 0 15px 0 5px #1d4c16, 0 15px 1px 6px rgb(0 0 0 / 30%) !important;
-}
-</style>
-
 <style lang="scss" scoped>
 .stage {
   &__container {
-    // background-color: #00b13f;
+    background-color: #555;
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  &__content {
+
+  &__box {
     position: relative;
-    width: 100%;
-    min-width: 320px;
-    max-width: 640px;
-    text-align: center;
-  }
-
-  &__reward {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #888;
-    border-radius: 8px;
-    min-height: 80px;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
+    border-radius: 24px;
+    background-color: rgba(0, 0, 0, 0.2);
+    overflow: hidden;
 
-    &--name {
-      font-size: 1.5rem;
-      font-weight: 600;
+    &--disable {
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: rgba(255, 255, 255, 0.7);
+        box-shadow: inset 0 10px 30px rgba(0, 0, 0, .1), inset 0 10px 30px rgba(0, 0, 0, .2), inset 0 10px 30px rgba(0, 0, 0, .05), inset 0 10px 30px rgba(0, 0, 0, .05);
+      }
+    }
+  }
+
+  &-btn {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 16px;
+    bottom: 16px;
+    font-size: 3rem;
+    font-weight: 500;
+    color: #820000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: initial;
+    background-image: linear-gradient(#e51414, #720000);
+    border-radius: 50%;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, .1),0 3px 6px rgba(0, 0, 0, .2);
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+
+    &:active {
+      background-image: linear-gradient(#720000, #8a0000);
+      border: 5px solid #8c0000;
+      color: #820000;
     }
 
-    &--winner {
-      font-size: 1rem;
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.8;
+      background-image: linear-gradient(#ff0000, #720000) !important;
+      border: none !important;
+      color: #720000 !important;
     }
+
+    &--border {
+      position: relative;
+      border-radius: 50%;
+      background-color: #aaa;
+      border-bottom: 3px solid rgba(0, 0, 0, 0.4);
+      border-top: 3px solid rgba(255, 255, 255, 0.3);
+    }
+    // padding: 8px;
+
+    // &::after {
+    //   content: '';
+    //   position: absolute;
+    //   top: 16px;
+    //   bottom: 16px;
+    //   left: 16px;
+    //   right: 16px;
+    //   border-radius: 50%;
+    //   background-color: red;
+    //   cursor: pointer;
+
+    //   &:hover {
+    //     top: 8px;
+    //     bottom: 8px;
+    //     left: 8px;
+    //     right: 8px;
+    //   }
+    // }
   }
 }
-
 </style>

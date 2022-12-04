@@ -8,31 +8,73 @@
               <v-form ref="form" v-model="valid" @submit.prevent="">
                 <div class="d-flex">
                   <v-spacer />
-                  <v-chip
-                    :color="stageColor"
-                    small
-                    outlined
-                  >
+                  <v-chip :color="stageColor" small outlined>
                     {{ stage }}
                   </v-chip>
                 </div>
-                <div class="pb-1">Reward</div>
-                <v-select v-model="rewardId" :items="items" :rules="[v => !!v || 'Must be selected reward']" item-text="name" item-value="id" dense single-line outlined />
-                <!-- <div class="d-flex">
-                  <div style="flex: 1">
-                    <v-btn color="primary" block @click="handleNextRandom">Next Spin</v-btn>
+                <div class="d-flex align-center">
+                  <div>Reward</div>
+                  <v-spacer />
+                  <div
+                    class="staff-btn--reward primary--text"
+                    @click="handleOnOpenManageReward"
+                  >
+                    Manage Reward
                   </div>
-                  <div style="width: 16px"></div>
-                  <div style="flex: 1">
-                    <v-btn color="error" block @click="handleReset">Reset</v-btn>
-                  </div>
-                </div> -->
+                </div>
+                <v-select
+                  v-model="rewardId"
+                  :items="rewardItems"
+                  :rules="[(v) => !!v || 'Must be selected reward']"
+                  item-text="name"
+                  item-value="id"
+                  dense
+                  single-line
+                  outlined
+                >
+                  <template #item="{ item, attrs, on }">
+                    <v-list-item v-bind="attrs" v-on="on">
+                      <v-list-item-content>
+                        <v-list-item-title>{{ item.name }}</v-list-item-title>
+                      </v-list-item-content>
+                      <v-list-item-action>
+                        {{ item.draws }}/{{ item.qty }}
+                      </v-list-item-action>
+                    </v-list-item>
+                  </template>
+                  <template #selection="{ item }">
+                    {{ item.name }} ({{ item.draws }}/{{ item.qty }})
+                  </template>
+                </v-select>
                 <v-row>
                   <v-col md="6">
-                    <v-btn color="primary" block @click="handleNextRandom">Next Spin</v-btn>
+                    <v-btn
+                      v-if="stage === 'wait'"
+                      :disabled="!enabledReward || !rewardId"
+                      color="primary"
+                      block
+                      @click="handleOnStart"
+                    >
+                      Start
+                    </v-btn>
+                    <v-btn
+                      v-else
+                      :disabled="!['ready', 'break'].includes(stage)"
+                      color="error"
+                      block
+                      @click="handleOnStop"
+                    >
+                      Stop
+                    </v-btn>
                   </v-col>
                   <v-col md="6">
-                    <v-btn color="error" block @click="handleReset">Reset</v-btn>
+                    <v-btn
+                      :disabled="!rewardId || stage !== 'ready'"
+                      block
+                      @click="handleRollback"
+                    >
+                      Rollback (-1)
+                    </v-btn>
                   </v-col>
                 </v-row>
               </v-form>
@@ -42,7 +84,20 @@
       </v-row>
       <v-row>
         <v-col>
-          <div class="text-subtitle-1 pb-2">History</div>
+          <div class="d-flex">
+            <div class="text-subtitle-1">History</div>
+            <v-spacer />
+            <div
+              :class="[
+                'staff-btn--reward',
+                'error--text',
+                { 'staff-btn--disable': logs.length < 1 && stage !== 'ready' },
+              ]"
+              @click="confirmDeleteHistoryDialog = logs.length > 0"
+            >
+              Reset
+            </div>
+          </div>
           <v-data-table
             :headers="headers"
             :items="logs"
@@ -55,27 +110,71 @@
             fixed-header
           >
             <template #[`item.no`]="{ index }">
-              {{ (index + 1) + ((options.page - 1) * options.itemsPerPage) }}
+              {{ index + 1 + (options.page - 1) * options.itemsPerPage }}
             </template>
             <template #[`item.status`]="{ item }">
-              <v-chip
-                :color="getStatusColor(item.status)"
-                small
-                outlined
-              >
+              <v-chip :color="getStatusColor(item.status)" small outlined>
                 {{ item.status || 'wait' }}
               </v-chip>
             </template>
             <template #[`item.tools`]="{ item }">
-              <div v-if="item.status === 'wait'">
-                <v-btn color="success" icon @click="handleConfirm(item)"><v-icon>mdi-check</v-icon></v-btn>
-                <v-btn color="error" icon @click="handleReject(item)"><v-icon>mdi-close</v-icon></v-btn>
+              <div class="text-right">
+                <!-- <v-btn color="success" icon @click="handleConfirm(item)"
+                  ><v-icon>mdi-check</v-icon></v-btn
+                >
+                <v-btn color="error" icon @click="handleReject(item)"
+                  ><v-icon>mdi-close</v-icon></v-btn
+                > -->
+                <v-btn v-if="['wait'].includes(item.status)" color="success" icon @click="handleOnChangeStatusHistory(item, 'confirmed')"
+                  ><v-icon>mdi-check</v-icon></v-btn
+                >
+                <v-btn v-if="['wait', 'confirmed'].includes(item.status)" color="error" icon @click="handleOnChangeStatusHistory(item, 'rejected')"
+                  ><v-icon>mdi-close</v-icon></v-btn
+                >
               </div>
             </template>
           </v-data-table>
         </v-col>
       </v-row>
+      <v-row>
+        <v-col>
+          <div class="d-flex">
+            <v-spacer />
+            <v-btn color="error" block @click="handleOnResetAll">
+              Reset All
+            </v-btn>
+          </div>
+        </v-col>
+      </v-row>
     </v-container>
+    <v-navigation-drawer v-model="rewardManageDialog" width="320" fixed right>
+      <template #prepend>
+        <v-list-item>
+          <v-list-item-content>
+            <v-list-item-title>Rewards</v-list-item-title>
+          </v-list-item-content>
+          <v-list-item-action>
+            <v-icon @click="handleOnCloseManageReward">mdi-close</v-icon>
+          </v-list-item-action>
+        </v-list-item>
+      </template>
+      <manage-reward v-model="rewardItems" />
+    </v-navigation-drawer>
+    <v-dialog v-model="confirmDeleteHistoryDialog" max-width="480" persistent>
+      <v-card>
+        <v-card-title>Reset History</v-card-title>
+        <v-card-text>
+          Deleting all reward history will permanently remove it.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn text @click="confirmDeleteHistoryDialog = false">Cancel</v-btn>
+          <v-btn color="error" text @click="handleOnDeleteHistory"
+            >Delete History</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -93,7 +192,7 @@ export default {
         id: -1,
         name: '',
       },
-      items: [],
+      rewardItems: [],
       logs: [],
       headers: [
         {
@@ -102,38 +201,54 @@ export default {
           sortable: false,
           value: 'no',
         },
-        { text: 'Code', value: 'code', sortable: false, },
-        { text: 'Name', value: 'name', sortable: false, },
-        { text: 'Reward', value: 'reward_name', sortable: false, },
-        { text: 'Status', value: 'status', sortable: false, },
-        { text: 'Timestamp', value: 'timestamp', sortable: false, },
+        { text: 'Code', value: 'code', sortable: false },
+        { text: 'Name', value: 'name', sortable: false },
+        { text: 'Reward', value: 'reward_name', sortable: false },
+        { text: 'Status', value: 'status', sortable: false },
+        { text: 'Timestamp', value: 'timestamp', sortable: false },
         { text: '', value: 'tools', sortable: false, align: 'end' },
       ],
       options: {},
       valid: true,
+      enabledReward: false,
+      rewardManageDialog: false,
+      rewardManageMini: true,
+      tempEditRewardItems: [],
+
+      confirmDeleteHistoryDialog: false,
     }
   },
   computed: {
     stageColor() {
-      return this.stage === 'wait' ? 'warning' : this.stage === 'spin' ? 'error' : this.stage === 'ready' ? 'success' : 'grey'
-    }
+      switch(this.stage) {
+        case 'wait':
+          return 'warning'
+        case 'spinning':
+        case 'break':
+          return 'error'
+        case 'ready':
+          return 'success'
+        default:
+          return 'grey'
+      }
+    },
+  },
+  watch: {
+    rewardId(val) {
+      const item = this.rewardItems.find((x) => x.id === val)
+      if (item) {
+        const qty = item.qty
+        this.enabledReward = qty > 0
+      }
+    },
   },
   mounted() {
     this.initEvent()
-    this.getReward()
+    this.getCurrentReward()
   },
   methods: {
     initEvent() {
       try {
-        // console.log(this.$fire.database.ref('stage_spin'))
-        // const ref = this.$fire.database.ref('game/reward')
-        // ref.on('value', (snapshot) => {
-        //   const val = snapshot.val()
-        //   this.reward = val.name
-        //   this.winner = val.winner.code + ' - ' + val.winner.name
-        //   console.log(val)
-        // })
-
         this.stageRef = this.$fire.database.ref('game/stage')
         this.stageRef.on('value', (snapshot) => {
           const val = snapshot.val()
@@ -145,41 +260,67 @@ export default {
         refLog.on('value', (snapshot) => {
           const val = snapshot.val() || {}
           const items = Object.keys(val).map((x) => ({ ...val[x], ref: x }))
-          // this.logs = (snapshot.val() || []).filter((x) => !!x)
-          console.log(items)
           this.logs = items
+        })
+
+        const refReward = this.$fire.database.ref('rewards')
+        refReward.on('value', (snapshot) => {
+          const items = snapshot.val() || {}
+          this.rewardItems = Object.keys(items).map((x) => ({
+            ...items[x],
+            ref: x,
+          }))
         })
       } catch (error) {
         console.error(error)
       }
     },
-    getReward() {
-      const ref = this.$fire.database.ref('rewards')
-      ref.once('value', (snapshot) => {
-        this.items = (snapshot.val() || []).filter((x) => !!x.id)
-      })
-
+    getCurrentReward() {
       this.$fire.database.ref('game/reward').once('value', (snapshot) => {
         const val = snapshot.val()
         val && (this.rewardId = val.id)
       })
     },
-    async handleNextRandom() {
-      console.log('check reward')
+    async handleOnStart() {
       if (!this.$refs.form.validate()) return
-      const item = this.items.find((x) => x.id === this.rewardId)
+      const item = this.rewardItems.find((x) => x.id === this.rewardId)
       if (!item) return
       const ref = this.$fire.database.ref('game/reward')
       await ref.update({
         id: item.id,
         name: item.name,
+        ref: item.ref,
       })
       await this.$fire.database.ref('game/stage').update({ status: 'ready' })
     },
-    async handleReset() {
-      await this.$fire.database.ref('game/reward').update({ id: -1, name: '' })
+    async handleOnStop() {
+      if (!['ready', 'break'].includes(this.stage)) return
       await this.$fire.database.ref('game/stage').update({ status: 'wait' })
-      this.$refs.form.reset();
+    },
+    async handleOnResetAll() {
+      await this.$fire.database
+        .ref('game')
+        .set({ reward: {}, stage: { code: -1, status: 'wait' } })
+      await this.$fire.database.ref('logs').remove()
+      await this.$fire.database.ref('rewards').remove()
+    },
+    async handleRollback() {
+      if (!this.$refs.form.validate()) return
+      try {
+        const item = this.rewardItems.find((x) => x.id === this.rewardId)
+        if (!item) return
+        await this.$fire.database.ref('rewards').child(item.ref).transaction((item) => {
+          item.draws = Math.max(0, item.draws - 1)
+          return item
+        })
+        // const newItem = JSON.parse(JSON.stringify(item))
+        // const ref = newItem.ref
+        // newItem.draws = Math.max(0, newItem.draws - 1)
+        // delete newItem.ref
+        // await this.$fire.database.ref('rewards').child(ref).update(newItem)
+      } catch (error) {
+        console.error(error)
+      }
     },
     getStatusColor(status) {
       if (status === 'confirmed') return 'success'
@@ -187,12 +328,49 @@ export default {
       return 'warning'
     },
     async handleConfirm(item) {
-      await this.$fire.database.ref('logs/' + item.ref).update({ status: 'confirmed', updated_at: dayjs().format('YYYY-MM-DD HH:mm:ss') })
+      await this.$fire.database.ref('logs/' + item.ref).update({
+        status: 'confirmed',
+        updated_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      })
     },
     async handleReject(item) {
-      await this.$fire.database.ref('logs/' + item.ref).update({ status: 'rejected', updated_at: dayjs().format('YYYY-MM-DD HH:mm:ss') })
+      await this.$fire.database.ref('logs/' + item.ref).update({
+        status: 'rejected',
+        updated_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      })
     },
-  }
+    async handleOnChangeStatusHistory(item, status = 'confirmed') {
+      await this.$fire.database.ref('logs/' + item.ref).update({
+        status,
+        updated_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      })
+    },
+    async handleOnDeleteHistory() {
+      try {
+        await this.$fire.database.ref('logs').remove()
+        await this.$fire.database.ref('rewards').transaction((items) => {
+          // item.draws = item.draws ? item.draws + 1 : 1
+          for (const key in items) {
+            const item = items[key]
+            item.draws = 0
+          }
+          return items
+        })
+        this.confirmDeleteHistoryDialog = false
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    handleOnOpenManageReward() {
+      this.rewardManageDialog = true
+    },
+    handleOnCloseManageReward() {
+      this.rewardManageDialog = false
+    },
+    handleOnAddReward() {
+      this.createRewardDialog = true
+    },
+  },
 }
 </script>
 
@@ -210,6 +388,23 @@ export default {
     // width: 100%;
     // max-width: 860px;
     // display: flex;
+  }
+  &-btn {
+    &--reward {
+      cursor: pointer;
+      padding-top: 8px;
+      padding-bottom: 8px;
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+    &--disable {
+      cursor: not-allowed;
+      color: #ddd !important;
+      &:hover {
+        text-decoration: none !important;
+      }
+    }
   }
 }
 </style>
