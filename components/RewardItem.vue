@@ -24,6 +24,15 @@
             dense
             outlined
           ></v-text-field>
+          <div v-if="item.image_url" class="reward-item__image">
+            <v-img :src="item.image_url" class="grey lighten-4" height="240" contain />
+            <div class="reward-item__image--hover">
+              <v-btn icon @click="handleOnRemoveImage">
+                <v-icon color="white">mdi-delete</v-icon>
+              </v-btn>
+            </div>
+          </div>
+          <upload-image-field v-else v-model="item.image" accept="image/png" :rules="[(v) => !!v || 'Image is required']" />
         </v-form>
       </v-card-text>
       <v-card-actions>
@@ -99,7 +108,9 @@ export default {
       item: {
         name: '',
         qty: '',
+        image: '',
       },
+      tempDelete: '',
     }
   },
   // mounted() {
@@ -112,14 +123,18 @@ export default {
   methods: {
     handleOnEdit() {
       this.item = JSON.parse(JSON.stringify(this.value))
+      console.log('edit', this.item)
       this.edit = true
     },
     handleOnUpdate() {
+      if (!this.$refs.formCreateReward.validate()) return
+      // if (this.tempDelete) this.item
       this.$emit('update', this.item)
       this.edit = false
       this.$refs.formCreateReward.reset()
     },
     handleOnAdd() {
+      if (!this.$refs.formCreateReward.validate()) return
       this.$emit('input', this.item)
       this.$emit('add', this.item)
       this.$refs.formCreateReward.reset()
@@ -130,6 +145,11 @@ export default {
     handleOnCancel() {
       this.edit = false
       this.$emit('cancel')
+    },
+    handleOnRemoveImage() {
+      console.log('remove image')
+      this.item.temp_delete = this.item.image_path
+      this.item.image_url = null
     }
   }
 }
@@ -150,6 +170,26 @@ export default {
     align-items: flex-start;
     justify-content: flex-end;
     margin-right: -8px;
+  }
+
+  &__image {
+    position: relative;
+
+    &:hover > &--hover {
+      display: flex;
+    }
+
+    &--hover {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: rgba(0, 0, 0, 0.3);
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
   }
 }
 </style>

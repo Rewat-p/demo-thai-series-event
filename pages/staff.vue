@@ -25,12 +25,15 @@
                 <v-select
                   v-model="rewardId"
                   :items="rewardItems"
+                  :disabled="stage !== 'wait'"
                   :rules="[(v) => !!v || 'Must be selected reward']"
                   item-text="name"
                   item-value="id"
                   dense
                   single-line
                   outlined
+                  hide-details
+                  @change="handleOnChangeReward"
                 >
                   <template #item="{ item, attrs, on }">
                     <v-list-item v-bind="attrs" v-on="on">
@@ -46,11 +49,27 @@
                     {{ item.name }} ({{ item.draws }}/{{ item.qty }})
                   </template>
                 </v-select>
+                <div class="register-types-list">
+                  <template v-for="(item, i) in registerTypes">
+                    <div :key="'type-' + i" class="register-types-item">
+                      <v-checkbox
+                        v-model="selectedTypes"
+                        :disabled="stage !== 'wait'"
+                        :label="item.name"
+                        :value="item.id"
+                        :hide-details="i !== 0"
+                        :rules="[(v) => v.length > 0 || 'Please select register group']"
+                        dense
+                        multiple
+                      ></v-checkbox>
+                    </div>
+                  </template>
+                </div>
                 <v-row>
                   <v-col md="6">
                     <v-btn
                       v-if="stage === 'wait'"
-                      :disabled="!enabledReward || !rewardId"
+                      :disabled="!enabledReward || !rewardId || !valid"
                       color="primary"
                       block
                       @click="handleOnStart"
@@ -59,7 +78,7 @@
                     </v-btn>
                     <v-btn
                       v-else
-                      :disabled="!['ready', 'break'].includes(stage)"
+                      :disabled="!['ready', 'spined', 'break'].includes(stage)"
                       color="error"
                       block
                       @click="handleOnStop"
@@ -69,7 +88,7 @@
                   </v-col>
                   <v-col md="6">
                     <v-btn
-                      :disabled="!rewardId || stage !== 'ready'"
+                      :disabled="!rewardId || !['ready', 'wait', 'break'].includes(stage) || currentItem.draws < 1"
                       block
                       @click="handleRollback"
                     >
@@ -192,6 +211,29 @@ export default {
         id: -1,
         name: '',
       },
+      selectedTypes: [],
+      registerTypes: [
+        {
+          id: 'Press',
+          name: 'Press'
+        },
+        {
+          id: 'Influencer',
+          name: 'Influencer'
+        },
+        {
+          id: 'Clients / Agency',
+          name: 'Clients / Agency'
+        },
+        {
+          id: 'Partner',
+          name: 'Partner'
+        },
+        {
+          id: 'Guest',
+          name: 'Guest'
+        }
+      ],
       rewardItems: [],
       logs: [],
       headers: [
@@ -208,6 +250,7 @@ export default {
         { text: 'Timestamp', value: 'timestamp', sortable: false },
         { text: '', value: 'tools', sortable: false, align: 'end' },
       ],
+
       options: {},
       valid: true,
       enabledReward: false,
@@ -216,6 +259,9 @@ export default {
       tempEditRewardItems: [],
 
       confirmDeleteHistoryDialog: false,
+
+      rewardCount: 0,
+      currentItem: {},
     }
   },
   computed: {
@@ -253,6 +299,8 @@ export default {
         this.stageRef.on('value', (snapshot) => {
           const val = snapshot.val()
           this.stage = val.status
+          this.rewardCount = val.count
+          this.selectedTypes = val.types || []
           console.log(this.stage)
         })
 
@@ -278,7 +326,10 @@ export default {
     getCurrentReward() {
       this.$fire.database.ref('game/reward').once('value', (snapshot) => {
         const val = snapshot.val()
-        val && (this.rewardId = val.id)
+        if (val) {
+          this.rewardId = val.id
+          this.handleOnChangeReward(val.id)
+        }
       })
     },
     async handleOnStart() {
@@ -290,11 +341,14 @@ export default {
         id: item.id,
         name: item.name,
         ref: item.ref,
+        image_url: item.image_url
       })
-      await this.$fire.database.ref('game/stage').update({ status: 'ready' })
+      const notPlay = item.draws >= item.qty
+      await this.$fire.database.ref('game/stage').update({ status: notPlay ? 'break': 'ready', count: item.draws, types: this.selectedTypes })
+      // await this.$fire.database.ref('game/stage').update({ count: item.draws })
     },
     async handleOnStop() {
-      if (!['ready', 'break'].includes(this.stage)) return
+      if (!['ready', 'spined', 'break'].includes(this.stage)) return
       await this.$fire.database.ref('game/stage').update({ status: 'wait' })
     },
     async handleOnResetAll() {
@@ -309,10 +363,14 @@ export default {
       try {
         const item = this.rewardItems.find((x) => x.id === this.rewardId)
         if (!item) return
-        await this.$fire.database.ref('rewards').child(item.ref).transaction((item) => {
-          item.draws = Math.max(0, item.draws - 1)
-          return item
-        })
+        if (item.draws < 1) return
+        // await this.$fire.database.ref('rewards').child(item.ref).transaction((item) => {
+        //   item.draws = Math.max(0, item.draws - 1)
+        //   return item
+        // })
+        const draws = item.draws - 1
+        await this.$fire.database.ref('rewards').child(item.ref).update({ draws })
+        await this.$fire.database.ref('game/stage').update({ count: draws })
         // const newItem = JSON.parse(JSON.stringify(item))
         // const ref = newItem.ref
         // newItem.draws = Math.max(0, newItem.draws - 1)
@@ -370,6 +428,12 @@ export default {
     handleOnAddReward() {
       this.createRewardDialog = true
     },
+    handleOnChangeReward(val) {
+      console.log(val)
+      const item = this.rewardItems.find((x) => x.id === val)
+      if (!item) return
+      this.currentItem = JSON.parse(JSON.stringify(item))
+    }
   },
 }
 </script>
@@ -405,6 +469,16 @@ export default {
         text-decoration: none !important;
       }
     }
+  }
+}
+
+.register-types {
+  &-list {
+    display: flex;
+    padding: 16px 0;
+  }
+  &-item {
+    flex: 1;
   }
 }
 </style>

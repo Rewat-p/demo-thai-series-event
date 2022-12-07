@@ -31,6 +31,7 @@
 </template>
 
 <script>
+import { v4 as uuidv4 } from 'uuid'
 export default {
   name: 'ManageReward',
   props: {
@@ -58,12 +59,13 @@ export default {
     value: {
       deep: true,
       handler(val) {
-        this.items = val
+        this.items = this.processData(val)
+        console.log(this.items)
       }
     }
   },
   mounted() {
-    this.items = this.value
+    this.items = this.processData(this.value)
   },
   methods: {
     handleOnCreate() {
@@ -91,7 +93,20 @@ export default {
         const ref = newItem.ref
         newItem.name = String(newItem.name).trim()
         newItem.qty = Number(newItem.qty)
+        // await new Promise((resolve) => setInterval(resolve, 1000))
+        // console.log(newItem, ref)
+        if (newItem.temp_delete) {
+          console.log('delete', newItem.temp_delete)
+          await this.$fire.storage.ref('/' + newItem.temp_delete).delete()
+          delete newItem.temp_delete
+        }
+        const refName = uuidv4() + '.png'
+        const imgSnapshot = await this.$fire.storage.ref('/rewards/' + refName).putString(newItem.image, 'data_url')
+        // console.log(imgSnapshot.metadata)
         delete newItem.ref
+        delete newItem.image
+        newItem.image_url = await imgSnapshot.ref.getDownloadURL()
+        newItem.image_path = imgSnapshot.metadata.fullPath
         await this.$fire.database.ref('rewards').child(ref).update(newItem)
         await this.onLoadReward()
       } catch (error) {
@@ -113,7 +128,10 @@ export default {
       const snapshot = await this.$fire.database.ref('rewards').once('value')
       const items = snapshot.val() || {}
       this.items = Object.keys(items).map((x) => ({ ...items[x], ref: x }))
-    }
+    },
+    processData(items) {
+      return items
+    },
   },
 }
 </script>
