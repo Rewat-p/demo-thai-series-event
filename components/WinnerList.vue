@@ -10,13 +10,27 @@
       <!-- {{ currentReward.name }} -->
     </div>
     <div class="winner-list__content mt-10" :style="{ maxHeight: maxHeight + 'px' }">
-      <v-row>
+      <v-row v-if="items.length <= 2" :justify="items.length === 1? 'center': 'space-around'">
         <v-col cols="4" v-for="(item, index) in items" :key="index">
           <div
             :key="item.ref"
             class="winner-list__item text-center"
             :style="{
-              fontSize: fontSizeContent + 'rem',
+              fontSize: fontSizeContent * (items.length > 1?  4: 5) + 'rem',
+              lineHeight: fontSizeContent * (items.length > 1? 9: 9) + 'rem',
+            }"
+          >
+            {{ item.code | display_code }}
+          </div>
+        </v-col>
+      </v-row>
+      <v-row v-else>
+        <v-col cols="4" v-for="(item, index) in items" :key="index">
+          <div
+            :key="item.ref"
+            class="winner-list__item text-center"
+            :style="{
+              fontSize: fontSizeContent  + 'rem',
               lineHeight: fontSizeContent * 1.8 + 'rem',
             }"
           >
@@ -65,6 +79,8 @@
         </v-slider>
       </div>
     </div>
+    <!-- <v-btn  @click="test.push({ref: test.length+1, code:test.length+1})">Test add</v-btn>
+    <v-btn  @click="test = test.slice(0, -1)">Test remove</v-btn> -->
   </div>
 </template>
 
@@ -82,6 +98,7 @@ export default {
       currentReward: {},
       logs: [],
       fontSize: 1,
+      // test:[]
     }
   },
   computed: {
@@ -120,7 +137,6 @@ export default {
             this.onResize()
             this.updateContentScroll()
           })
-
         this.$fire.database.ref('game/reward').on('value', (snapshot) => {
           const val = snapshot.val() || {}
           this.currentReward = val
@@ -152,14 +168,12 @@ export default {
   height: 100%;
   // background-color: rgba(255, 255, 255, 0.4);
   overflow: hidden;
-
   &__title {
     // padding-left: 16px;
     // padding-right: 16px;
     padding-top: 16px;
     // padding-bottom: 16px;
   }
-
   &__content {
     min-width: 260px;
     min-height: 200px;
@@ -167,13 +181,11 @@ export default {
     overflow: hidden;
     overflow-y: auto;
     scrollbar-width: none;
-
     &::-webkit-scrollbar {
       width: 0;
       height: 0;
     }
   }
-
   &__actions {
     visibility: hidden;
     display: flex;
@@ -184,7 +196,6 @@ export default {
     // width: 100%;
     padding: 4px 8px;
   }
-
   &:hover > &__actions {
     visibility: visible;
   }
