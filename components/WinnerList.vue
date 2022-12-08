@@ -10,14 +10,14 @@
       <!-- {{ currentReward.name }} -->
     </div>
     <div class="winner-list__content mt-10" :style="{ maxHeight: maxHeight + 'px' }">
-      <v-row v-if="items.length <= 2" :justify="items.length === 1? 'center': 'space-around'">
-        <v-col cols="4" v-for="(item, index) in items" :key="index">
+      <v-row v-if="test.length <= 2" :justify="test.length === 1? 'center': 'space-around'">
+        <v-col cols="12" v-for="(item, index) in test" :key="index">
           <div
             :key="item.ref"
             class="winner-list__item text-center"
             :style="{
-              fontSize: fontSizeContent * (items.length > 1?  4: 5) + 'rem',
-              lineHeight: fontSizeContent * (items.length > 1? 9: 9) + 'rem',
+              fontSize: fontSizeContent * (test.length > 1?  4: 5) + 'rem',
+              lineHeight: fontSizeContent * (test.length > 1? 5: 10) + 'rem',
             }"
           >
             {{ item.code | display_code }}
@@ -25,7 +25,7 @@
         </v-col>
       </v-row>
       <v-row v-else>
-        <v-col cols="4" v-for="(item, index) in items" :key="index">
+        <v-col cols="4" v-for="(item, index) in test" :key="index">
           <div
             :key="item.ref"
             class="winner-list__item text-center"
@@ -79,8 +79,8 @@
         </v-slider>
       </div>
     </div>
-    <!-- <v-btn  @click="test.push({ref: test.length+1, code:test.length+1})">Test add</v-btn>
-    <v-btn  @click="test = test.slice(0, -1)">Test remove</v-btn> -->
+    <v-btn  @click="test.push({ref: test.length+1, code:test.length+1})">Test add</v-btn>
+    <v-btn  @click="test = test.slice(0, -1)">Test remove</v-btn>
   </div>
 </template>
 
@@ -98,7 +98,7 @@ export default {
       currentReward: {},
       logs: [],
       fontSize: 1,
-      // test:[]
+      test:[]
     }
   },
   computed: {
