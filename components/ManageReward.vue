@@ -100,13 +100,16 @@ export default {
           await this.$fire.storage.ref('/' + newItem.temp_delete).delete()
           delete newItem.temp_delete
         }
-        const refName = uuidv4() + '.png'
-        const imgSnapshot = await this.$fire.storage.ref('/rewards/' + refName).putString(newItem.image, 'data_url')
-        // console.log(imgSnapshot.metadata)
+        
+        if (newItem.image) {
+          const refName = uuidv4() + '.png'
+          const imgSnapshot = await this.$fire.storage.ref('/rewards/' + refName).putString(newItem.image, 'data_url')
+          // console.log(imgSnapshot.metadata)
+          delete newItem.image
+          newItem.image_url = await imgSnapshot.ref.getDownloadURL()
+          newItem.image_path = imgSnapshot.metadata.fullPath
+        }
         delete newItem.ref
-        delete newItem.image
-        newItem.image_url = await imgSnapshot.ref.getDownloadURL()
-        newItem.image_path = imgSnapshot.metadata.fullPath
         await this.$fire.database.ref('rewards').child(ref).update(newItem)
         await this.onLoadReward()
       } catch (error) {
