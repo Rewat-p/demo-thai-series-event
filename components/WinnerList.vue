@@ -9,8 +9,22 @@
     >
       <!-- {{ currentReward.name }} -->
     </div>
-    <div class="winner-list__content" :style="{ maxHeight: maxHeight + 'px' }">
-      <template v-for="item in items">
+    <div class="winner-list__content mt-10" :style="{ maxHeight: maxHeight + 'px' }">
+      <v-row>
+        <v-col cols="4" v-for="(item, index) in items" :key="index">
+          <div
+            :key="item.ref"
+            class="winner-list__item text-center"
+            :style="{
+              fontSize: fontSizeContent + 'rem',
+              lineHeight: fontSizeContent * 1.8 + 'rem',
+            }"
+          >
+            {{ item.code | display_code }}
+          </div>
+        </v-col>
+      </v-row>
+      <!-- <template v-for="item in items">
         <div
           :key="item.ref"
           class="winner-list__item"
@@ -21,7 +35,7 @@
         >
           {{ item.code | display_code }}
         </div>
-      </template>
+      </template> -->
     </div>
     <div class="winner-list__actions">
       <div class="d-flex" style="height: 100%">
